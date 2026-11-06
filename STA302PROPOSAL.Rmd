@@ -15,7 +15,23 @@ ames_raw <- AmesHousing::ames_raw
 ames     <- make_ames()             
 
 ```
+```{r}
+# DATA DESCRIPTION PART
 
+nrow(ames)
+summary(ames$Sale_Price)
+summary(ames$Central_Air)
+summary(ames$Bldg_Type)
+summary(ames$Year_Built)
+summary(ames$Garage_Cars)
+summary(ames$Neighborhood)
+summary(ames$Gr_Liv_Area)
+summary(ames$Year_Remod_Add)
+summary(ames$Lot_Area)
+summary(ames$Overall_Qual)
+plot(ames$Gr_Liv_Area, ames$Overall_Qual)
+
+```
 ## 1) Fit a preliminary model using at least 9 predictors from your dataset
 ```{r, fig.height=3.5, fig.width=3.5}
 # Fit a preliminary model using at least 9 predictors from your dataset
