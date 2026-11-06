@@ -4,14 +4,12 @@
 install.packages("AmesHousing")
 install.packages("dplyr")
 install.packages("kableExtra")
-install.packages("car")
 
 library(AmesHousing)
 library(kableExtra)
 library(knitr)
 library(dplyr)
 library(ggplot2)
-library(car)
 
 ames_raw <- AmesHousing::ames_raw 
 ames     <- make_ames()             
@@ -26,7 +24,6 @@ og_model <- lm(Sale_Price ~ Year_Built + Gr_Liv_Area + Year_Remod_Add +
                  Bldg_Type + Central_Air + Overall_Qual*Gr_Liv_Area, data = ames)
 # summary
 summary(og_model)
-vif(og_model)
 
 ```
 ## 2) Display your preliminary model in a table or a figure, ensuring that standard errors and/or confidence intervals are included
