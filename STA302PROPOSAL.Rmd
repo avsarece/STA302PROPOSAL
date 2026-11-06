@@ -3,13 +3,15 @@
 ```{r}
 install.packages("AmesHousing")
 install.packages("dplyr")
-install.packages("kableExtra")   
+install.packages("kableExtra")
+install.packages("car")
 
 library(AmesHousing)
 library(kableExtra)
 library(knitr)
 library(dplyr)
 library(ggplot2)
+library(car)
 
 ames_raw <- AmesHousing::ames_raw 
 ames     <- make_ames()             
@@ -24,6 +26,8 @@ og_model <- lm(Sale_Price ~ Year_Built + Gr_Liv_Area + Year_Remod_Add +
                  Bldg_Type + Central_Air + Overall_Qual*Gr_Liv_Area, data = ames)
 # summary
 summary(og_model)
+vif(og_model)
+
 ```
 ## 2) Display your preliminary model in a table or a figure, ensuring that standard errors and/or confidence intervals are included
 ```{r, fig.height=3.5, fig.width=3.5}
@@ -78,6 +82,36 @@ rownames(table_compact) <- c("Year built","Living area (sq ft)","Garage capacity
 knitr::kable(table_compact, 
              format = "html", 
              caption = "Selected coefficients, with their relative Standard Errors, Confidence Intervals, and p values",
+             align = "r"
+             ) %>%
+              kable_styling(full_width = FALSE, position = "center") 
+
+# C) Interaction Term 
+interaction_terms <- c("Gr_Liv_Area","Gr_Liv_Area:Overall_QualPoor", "Gr_Liv_Area:Overall_QualFair", 
+                       "Gr_Liv_Area:Overall_QualBelow_Average", "Gr_Liv_Area:Overall_QualAverage", 
+                       "Gr_Liv_Area:Overall_QualAbove_Average", "Gr_Liv_Area:Overall_QualGood", 
+                       "Gr_Liv_Area:Overall_QualVery_Good", "Gr_Liv_Area:Overall_QualExcellent",                  
+                       "Gr_Liv_Area:Overall_QualVery_Excellent")
+
+table_interaction <- data.frame(
+  Estimate = round(coefficients[interaction_terms, "Estimate"], 3),
+  SE       = round(coefficients[interaction_terms, "Std. Error"], 3),
+  Lower_95_CI  = round(CI[interaction_terms, 1], 3),
+  Upper_95_CI  = round(CI[interaction_terms, 2], 3),
+  p_value  = round(coefficients[interaction_terms, "Pr(>|t|)"], 3)
+) %>%
+  rename("Std. Err" = SE,
+         "Lower 95% CI" = Lower_95_CI, 
+         "Upper 95% CI" = Upper_95_CI, 
+        )
+
+table_interaction$p_value <- ifelse(table_interaction$p_value == 0.000,
+                         "<0.001",
+                         table_interaction$p_value)
+
+knitr::kable(table_interaction, 
+             format = "html", 
+             caption = "Baseline and Interaction terms, with their relative Standard Errors, Confidence Intervals, and p values",
              align = "r"
              ) %>%
               kable_styling(full_width = FALSE, position = "center") 
@@ -168,49 +202,49 @@ dev.off()
 ```{r}
 # CONDITIONAL MEAN PREDICTOR
 # Pairwise scatterplots manually for each numerical predictor
-png("conditional_mean_pred.png", width = 3000, height = 2400, res = 200)
-par(mfrow = c(3, 4))        
+png("conditional_mean_pred.png", width = 1200, height = 1200, res = 200)
+par(mfrow = c(1, 1))        
 
 plot(x = ames$Year_Built, y = ames$Year_Remod_Add,
      main = "Year Remodelled vs Year Built",
      xlab = "Year_Built", ylab = "Year_Remod_Add")
 
-plot(x = ames$Year_Built, y = ames$Gr_Liv_Area,
-     main = "Above Ground Living Area vs Year Built",
-     xlab = "Year_Built", ylab = "Gr_Liv_Area")
+#plot(x = ames$Year_Built, y = ames$Gr_Liv_Area,
+#     main = "Above Ground Living Area vs Year Built",
+#     xlab = "Year_Built", ylab = "Gr_Liv_Area")
 
-plot(x = ames$Year_Built, y = ames$Garage_Cars,
-     main = "Car capacity in Garage vs Year Built",
-     xlab = "Year_Built", ylab = "Garage_Cars")
+#plot(x = ames$Year_Built, y = ames$Garage_Cars,
+#     main = "Car capacity in Garage vs Year Built",
+#     xlab = "Year_Built", ylab = "Garage_Cars")
 
-plot(x = ames$Year_Built, y = ames$Lot_Area,
-     main = "Lot Area vs Year Built",
-     xlab = "Year_Built", ylab = "Lot_Area")
+#plot(x = ames$Year_Built, y = ames$Lot_Area,
+#     main = "Lot Area vs Year Built",
+#     xlab = "Year_Built", ylab = "Lot_Area")
 
-plot(x = ames$Year_Remod_Add, y = ames$Gr_Liv_Area,
-     main = "Above Ground Living Area vs Year Remodelled",
-     xlab = "Year_Remod_Add", ylab = "Gr_Liv_Area")
+#plot(x = ames$Year_Remod_Add, y = ames$Gr_Liv_Area,
+#     main = "Above Ground Living Area vs Year Remodelled",
+#     xlab = "Year_Remod_Add", ylab = "Gr_Liv_Area")
 
-plot(x = ames$Year_Remod_Add, y = ames$Garage_Cars,
-     main = "Car capacity in Garage vs Year Remodelled",
-     xlab = "Year_Remod_Add", ylab = "Garage_Cars")
+#plot(x = ames$Year_Remod_Add, y = ames$Garage_Cars,
+#     main = "Car capacity in Garage vs Year Remodelled",
+#     xlab = "Year_Remod_Add", ylab = "Garage_Cars")
 
-plot(x = ames$Year_Remod_Add, y = ames$Lot_Area,
-     main = "Lot Area vs Year Remodelled",
-     xlab = "Year_Remod_Add", ylab = "Lot_Area")
+#plot(x = ames$Year_Remod_Add, y = ames$Lot_Area,
+#     main = "Lot Area vs Year Remodelled",
+#     xlab = "Year_Remod_Add", ylab = "Lot_Area")
 
-plot(x = ames$Gr_Liv_Area, y = ames$Garage_Cars,
-     main = "Car capacity in Garage vs Above Ground Living Area",
-     xlab = "Gr_Liv_Area", ylab = "Garage_Cars")
+#plot(x = ames$Gr_Liv_Area, y = ames$Garage_Cars,
+#     main = "Car capacity in Garage vs Above Ground Living Area",
+#     xlab = "Gr_Liv_Area", ylab = "Garage_Cars")
 
-plot(x = ames$Gr_Liv_Area, y = ames$Lot_Area,
-     main = "Lot Area vs Above Ground Living Area",
-     xlab = "Gr_Liv_Area", ylab = "Lot_Area")
+#plot(x = ames$Gr_Liv_Area, y = ames$Lot_Area,
+#     main = "Lot Area vs Above Ground Living Area",
+#     xlab = "Gr_Liv_Area", ylab = "Lot_Area")
 
-plot(x = ames$Garage_Cars, y = ames$Lot_Area,
+#plot(x = ames$Garage_Cars, y = ames$Lot_Area,
      # pch = 16, cex = 0.5, col = rgb(0, 0, 0, 0.2),
-     main = "Lot Area vs Car capacity in Garage",
-     xlab = "Garage_Cars", ylab = "Lot_Area")
+#     main = "Lot Area vs Car capacity in Garage",
+#     xlab = "Garage_Cars", ylab = "Lot_Area")
 
 par(mfrow = c(3, 4))
 dev.off() 
@@ -345,8 +379,11 @@ dev.off()
 
 ```{r}
 #Sale price vs Above ground living area categorized per each Overall_Qual variable
-cols <- c("red", "blue", "yellow", "green", "purple",
-          "pink", "orange", "black", "brown", "cyan")
+png("scatterplot.png", width = 1500, height = 1200, res = 200)
+par(mfrow = c(1, 1))    
+cols <- c("#3B0F70", "#4A2A8C", "#3F4A9E", "#31679F", "#2A829A",
+          "#27A08A", "#4DB871", "#8CCB52", "#CDD83A", "#F2C230")
+
 
 ggplot(ames, aes(x = Gr_Liv_Area, y = Sale_Price, colour = Overall_Qual)) +
   geom_point(alpha = 0.15, size = 0.6) +
@@ -355,11 +392,19 @@ ggplot(ames, aes(x = Gr_Liv_Area, y = Sale_Price, colour = Overall_Qual)) +
   labs(x = "Above-ground living area (sq ft)",
        y = "Sale price",
        colour = "Overall quality")
+dev.off()
+
+# Check how many houses classify as very excellent
+count_very_excellent <- sum(ames$Overall_Qual == "Very_Excellent")
+count_very_excellent
+count_average <- sum(ames$Overall_Qual == "Average")
+count_average
 
 # Anova test to see if the interaction term improves the model
 no_int_model <- lm(Sale_Price ~ Year_Built + Gr_Liv_Area + Year_Remod_Add + 
                  Garage_Cars + Lot_Area + Overall_Qual + Neighborhood + 
                  Bldg_Type + Central_Air, data = ames)
 anova(no_int_model, og_model)
+ 
 
 ```
