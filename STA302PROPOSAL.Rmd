@@ -1,0 +1,365 @@
+
+## INSTALL LIBRARIES
+```{r}
+install.packages("AmesHousing")
+install.packages("dplyr")
+install.packages("kableExtra")   
+
+library(AmesHousing)
+library(kableExtra)
+library(knitr)
+library(dplyr)
+library(ggplot2)
+
+ames_raw <- AmesHousing::ames_raw 
+ames     <- make_ames()             
+
+```
+
+## 1) Fit a preliminary model using at least 9 predictors from your dataset
+```{r, fig.height=3.5, fig.width=3.5}
+# Fit a preliminary model using at least 9 predictors from your dataset
+og_model <- lm(Sale_Price ~ Year_Built + Gr_Liv_Area + Year_Remod_Add + 
+                 Garage_Cars + Lot_Area + Overall_Qual + Neighborhood + 
+                 Bldg_Type + Central_Air + Overall_Qual*Gr_Liv_Area, data = ames)
+# summary
+summary(og_model)
+```
+## 2) Display your preliminary model in a table or a figure, ensuring that standard errors and/or confidence intervals are included
+```{r, fig.height=3.5, fig.width=3.5}
+# A) FULL VERSION
+
+coefficients <- summary(og_model)$coefficients      
+CI    <- confint(og_model)  
+
+table <- data.frame(
+  Estimate = round(coefficients[, "Estimate"], 3),
+  SE       = round(coefficients[, "Std. Error"], 3),
+  Lower95  = round(CI[, 1], 3),
+  Upper95  = round(CI[, 2], 3),
+  p_value  = round(coefficients[, "Pr(>|t|)"], 3)
+)
+
+table$p_value <- ifelse(table$p_value == 0.000,
+                         "<0.001",
+                         table$p_value)
+
+knitr::kable(table, 
+             format = "html", 
+             caption = "Coefficients, with their relative Standard Errors and Confidence Intervals"
+             )
+
+# B) COMPACT VERSION FOR THE REPORT
+
+kept_coefs <- c("Year_Built", "Gr_Liv_Area", "Garage_Cars", "Year_Remod_Add", 
+                "Lot_Area", "Central_AirY", "Gr_Liv_Area:Overall_QualExcellent", 
+                "Overall_QualVery_Excellent", "Bldg_TypeDuplex", "NeighborhoodGreen_Hills")
+
+table_compact <- data.frame(
+  Estimate = round(coefficients[kept_coefs, "Estimate"], 3),
+  SE       = round(coefficients[kept_coefs, "Std. Error"], 3),
+  Lower_95_CI  = round(CI[kept_coefs, 1], 3),
+  Upper_95_CI  = round(CI[kept_coefs, 2], 3),
+  p_value  = round(coefficients[kept_coefs, "Pr(>|t|)"], 3)
+) %>%
+  rename("Std. Err" = SE,
+         "Lower 95% CI" = Lower_95_CI, 
+         "Upper 95% CI" = Upper_95_CI, 
+        )
+
+table_compact$p_value <- ifelse(table_compact$p_value == 0.000,
+                         "<0.001",
+                         table_compact$p_value)
+
+rownames(table_compact) <- c("Year built","Living area (sq ft)","Garage capacity (cars)",
+                             "Year remodelled", "Lot area (sq ft)", "Air Conditioning=yes", "Living area × Excellent quality", 
+                             "Quality=very excellent (vs very poor)", "Building type=duplex (vs single-family)", 
+                             "Neighbourhood=Green Hills (vs North Ames)")
+knitr::kable(table_compact, 
+             format = "html", 
+             caption = "Selected coefficients, with their relative Standard Errors, Confidence Intervals, and p values",
+             align = "r"
+             ) %>%
+              kable_styling(full_width = FALSE, position = "center") 
+
+```
+
+## 3.1) The required plots (residuals vs fitted, rediuals vs each predictor, normal q-q plot)
+```{r, fig.height=3.5, fig.width=3.5}
+png("res_norm_plots.png", width = 3000, height = 3000, res = 200)
+par(mfrow = c(4, 3))        
+
+# RESIDUAL VS. FITTED
+y_value <- resid(og_model)
+x_value <- fitted(og_model)
+plot(x = x_value, y = y_value, main="Residual vs Fitted", xlab="Fitted",
+     ylab="Residuals")
+abline(h = 0, lty = 2)
+
+# RESIDUAL VS. EACH PREDICTOR
+plot(x = ames$Year_Built, y = resid(og_model),
+     main = "Residuals vs Year Built",
+     xlab = "Year_Built", ylab = "Residuals")
+abline(h = 0, lty = 2)
+
+plot(x = ames$Gr_Liv_Area, y = resid(og_model),
+     main = "Residuals vs Above Ground Living Area",
+     xlab = "Gr_Liv_Area", ylab = "Residuals")
+abline(h = 0, lty = 2)
+
+plot(x = ames$Year_Remod_Add, y = resid(og_model),
+     main = "Residuals vs Remodel Date",
+     xlab = "Year_Remod_Add", ylab = "Residuals")
+abline(h = 0, lty = 2)
+
+plot(x = ames$Garage_Cars, y = resid(og_model),
+     main = "Residuals vs Car capacity in Garage",
+     xlab = "Garage_Cars", ylab = "Residuals")
+abline(h = 0, lty = 2)
+
+plot(x = ames$Lot_Area, y = resid(og_model),
+     main = "Residuals vs Lot Area",
+     xlab = "Lot_Area", ylab = "Residuals")
+abline(h = 0, lty = 2)
+
+plot(x = ames$Overall_Qual, y = resid(og_model),
+     main = "Residuals vs Rating of Material",
+     xlab = "Overall_Qual", ylab = "Residuals")
+abline(h = 0, lty = 2)
+
+plot(x = ames$Neighborhood, y = resid(og_model),
+     main = "Residuals vs Neighborhood",
+     xlab = "Neighborhood", ylab = "Residuals")
+abline(h = 0, lty = 2)
+
+plot(x = ames$Bldg_Type, y = resid(og_model),
+     main = "Residuals vs Building Type",
+     xlab = "Bldg_Type", ylab = "Residuals")
+abline(h = 0, lty = 2)
+
+plot(x = ames$Central_Air, y = resid(og_model),
+     main = "Residuals vs Central Air Conditioning",
+     xlab = "Central_Air", ylab = "Residuals")
+abline(h = 0, lty = 2)
+
+# NORMAL Q-Q PLOT
+qqnorm(resid(og_model))
+qqline(resid(og_model))
+
+dev.off() 
+```
+
+## 3.2) Conditional Mean Response 
+```{r}
+# CONDITIONAL MEAN RESPONSE
+png("cond_mean_response.png", width = 1400, height = 1200, res = 200)
+par(mfrow = c(1, 1))        
+
+plot(x = x_value, y = ames$Sale_Price,
+     main = "Response vs Fitted", xlab = "Fitted", ylab = "Sale_Price")
+abline(0, 1, lty = 2)                                   
+lines(lowess(fitted(og_model), ames$Sale_Price), col = "red")   
+
+par(mfrow = c(1, 1))
+dev.off()
+```
+
+## 3.3) Conditional Mean Predictor
+```{r}
+# CONDITIONAL MEAN PREDICTOR
+# Pairwise scatterplots manually for each numerical predictor
+png("conditional_mean_pred.png", width = 3000, height = 2400, res = 200)
+par(mfrow = c(3, 4))        
+
+plot(x = ames$Year_Built, y = ames$Year_Remod_Add,
+     main = "Year Remodelled vs Year Built",
+     xlab = "Year_Built", ylab = "Year_Remod_Add")
+
+plot(x = ames$Year_Built, y = ames$Gr_Liv_Area,
+     main = "Above Ground Living Area vs Year Built",
+     xlab = "Year_Built", ylab = "Gr_Liv_Area")
+
+plot(x = ames$Year_Built, y = ames$Garage_Cars,
+     main = "Car capacity in Garage vs Year Built",
+     xlab = "Year_Built", ylab = "Garage_Cars")
+
+plot(x = ames$Year_Built, y = ames$Lot_Area,
+     main = "Lot Area vs Year Built",
+     xlab = "Year_Built", ylab = "Lot_Area")
+
+plot(x = ames$Year_Remod_Add, y = ames$Gr_Liv_Area,
+     main = "Above Ground Living Area vs Year Remodelled",
+     xlab = "Year_Remod_Add", ylab = "Gr_Liv_Area")
+
+plot(x = ames$Year_Remod_Add, y = ames$Garage_Cars,
+     main = "Car capacity in Garage vs Year Remodelled",
+     xlab = "Year_Remod_Add", ylab = "Garage_Cars")
+
+plot(x = ames$Year_Remod_Add, y = ames$Lot_Area,
+     main = "Lot Area vs Year Remodelled",
+     xlab = "Year_Remod_Add", ylab = "Lot_Area")
+
+plot(x = ames$Gr_Liv_Area, y = ames$Garage_Cars,
+     main = "Car capacity in Garage vs Above Ground Living Area",
+     xlab = "Gr_Liv_Area", ylab = "Garage_Cars")
+
+plot(x = ames$Gr_Liv_Area, y = ames$Lot_Area,
+     main = "Lot Area vs Above Ground Living Area",
+     xlab = "Gr_Liv_Area", ylab = "Lot_Area")
+
+plot(x = ames$Garage_Cars, y = ames$Lot_Area,
+     # pch = 16, cex = 0.5, col = rgb(0, 0, 0, 0.2),
+     main = "Lot Area vs Car capacity in Garage",
+     xlab = "Garage_Cars", ylab = "Lot_Area")
+
+par(mfrow = c(3, 4))
+dev.off() 
+```
+## 4) WHAT WILL BE IN THE REPORT
+```{r}
+png("REPORT.png", width = 3000, height = 1200, res = 200)
+par(mfrow = c(1, 3))        
+
+# RESIDUAL VS. FITTED
+y_value <- resid(og_model)
+x_value <- fitted(og_model)
+plot(x = x_value, y = y_value, main="Residual vs Fitted", xlab="Fitted",
+     ylab="Residuals")
+abline(h = 0, lty = 2)
+
+# NORMAL Q-Q PLOT
+qqnorm(resid(og_model))
+qqline(resid(og_model))
+
+# COND MEAN RESPONSE
+plot(x = x_value, y = ames$Sale_Price,
+     main = "Response vs Fitted", xlab = "Fitted", ylab = "Sale_Price")
+abline(0, 1, lty = 2)                                   
+lines(lowess(fitted(og_model), ames$Sale_Price), col = "red")   
+
+dev.off()
+```
+
+```{r}
+# RESIDUAL VS. EACH PREDICTOR
+png("REPORT1.png", width = 3500, height = 3000, res = 200)
+par(mfrow = c(3, 3))        
+
+plot(x = ames$Year_Built, y = resid(og_model),
+     main = "Residuals vs Year Built",
+     xlab = "Year_Built", ylab = "Residuals")
+abline(h = 0, lty = 2)
+
+plot(x = ames$Gr_Liv_Area, y = resid(og_model),
+     main = "Residuals vs Above Ground Living Area",
+     xlab = "Gr_Liv_Area", ylab = "Residuals")
+abline(h = 0, lty = 2)
+
+plot(x = ames$Year_Remod_Add, y = resid(og_model),
+     main = "Residuals vs Remodel Date",
+     xlab = "Year_Remod_Add", ylab = "Residuals")
+abline(h = 0, lty = 2)
+
+plot(x = ames$Garage_Cars, y = resid(og_model),
+     main = "Residuals vs Car capacity in Garage",
+     xlab = "Garage_Cars", ylab = "Residuals")
+abline(h = 0, lty = 2)
+
+plot(x = ames$Lot_Area, y = resid(og_model),
+     main = "Residuals vs Lot Area",
+     xlab = "Lot_Area", ylab = "Residuals")
+abline(h = 0, lty = 2)
+
+plot(x = ames$Overall_Qual, y = resid(og_model),
+     main = "Residuals vs Overall Quality",
+     xlab = "Overall_Qual", ylab = "Residuals")
+abline(h = 0, lty = 2)
+
+plot(x = ames$Neighborhood, y = resid(og_model),
+     main = "Residuals vs Neighborhood",
+     xlab = "Neighborhood", ylab = "Residuals")
+abline(h = 0, lty = 2)
+
+plot(x = ames$Bldg_Type, y = resid(og_model),
+     main = "Residuals vs Building Type",
+     xlab = "Bldg_Type", ylab = "Residuals")
+abline(h = 0, lty = 2)
+
+plot(x = ames$Central_Air, y = resid(og_model),
+     main = "Residuals vs Central Air Conditioning",
+     xlab = "Central_Air", ylab = "Residuals")
+abline(h = 0, lty = 2)
+dev.off()
+```
+
+```{r}
+# CONDITIONAL MEAN PREDICTOR
+# Pairwise scatterplots manually for each numerical predictor
+png("REPORT2.png", width = 3000, height = 3000, res = 200)
+par(mfrow = c(4, 3))        
+
+plot(x = ames$Year_Built, y = ames$Year_Remod_Add,
+     main = "Year Remodelled vs Year Built",
+     xlab = "Year_Built", ylab = "Year_Remod_Add")
+
+plot(x = ames$Year_Built, y = ames$Gr_Liv_Area,
+     main = "Above Ground Living Area vs Year Built",
+     xlab = "Year_Built", ylab = "Gr_Liv_Area")
+
+plot(x = ames$Year_Built, y = ames$Garage_Cars,
+     main = "Car capacity in Garage vs Year Built",
+     xlab = "Year_Built", ylab = "Garage_Cars")
+
+plot(x = ames$Year_Built, y = ames$Lot_Area,
+     main = "Lot Area vs Year Built",
+     xlab = "Year_Built", ylab = "Lot_Area")
+
+plot(x = ames$Year_Remod_Add, y = ames$Gr_Liv_Area,
+     main = "Above Ground Living Area vs Year Remodelled",
+     xlab = "Year_Remod_Add", ylab = "Gr_Liv_Area")
+
+plot(x = ames$Year_Remod_Add, y = ames$Garage_Cars,
+     main = "Car capacity in Garage vs Year Remodelled",
+     xlab = "Year_Remod_Add", ylab = "Garage_Cars")
+
+plot(x = ames$Year_Remod_Add, y = ames$Lot_Area,
+     main = "Lot Area vs Year Remodelled",
+     xlab = "Year_Remod_Add", ylab = "Lot_Area")
+
+plot(x = ames$Gr_Liv_Area, y = ames$Garage_Cars,
+     main = "Car capacity in Garage vs Above Ground Living Area",
+     xlab = "Gr_Liv_Area", ylab = "Garage_Cars")
+
+plot(x = ames$Gr_Liv_Area, y = ames$Lot_Area,
+     main = "Lot Area vs Above Ground Living Area",
+     xlab = "Gr_Liv_Area", ylab = "Lot_Area")
+
+plot(x = ames$Garage_Cars, y = ames$Lot_Area,
+     # pch = 16, cex = 0.5, col = rgb(0, 0, 0, 0.2),
+     main = "Lot Area vs Car capacity in Garage",
+     xlab = "Garage_Cars", ylab = "Lot_Area")
+
+par(mfrow = c(3, 4))
+dev.off() 
+```
+
+```{r}
+#Sale price vs Above ground living area categorized per each Overall_Qual variable
+cols <- c("red", "blue", "yellow", "green", "purple",
+          "pink", "orange", "black", "brown", "cyan")
+
+ggplot(ames, aes(x = Gr_Liv_Area, y = Sale_Price, colour = Overall_Qual)) +
+  geom_point(alpha = 0.15, size = 0.6) +
+  geom_smooth(method = "lm", se = FALSE, linewidth = 0.9) +
+  scale_colour_manual(values = cols) +
+  labs(x = "Above-ground living area (sq ft)",
+       y = "Sale price",
+       colour = "Overall quality")
+
+# Anova test to see if the interaction term improves the model
+no_int_model <- lm(Sale_Price ~ Year_Built + Gr_Liv_Area + Year_Remod_Add + 
+                 Garage_Cars + Lot_Area + Overall_Qual + Neighborhood + 
+                 Bldg_Type + Central_Air, data = ames)
+anova(no_int_model, og_model)
+
+```
