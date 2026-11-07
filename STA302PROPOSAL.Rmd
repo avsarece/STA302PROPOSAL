@@ -74,7 +74,7 @@ knitr::kable(table,
 
 kept_coefs <- c("Year_Built", "Gr_Liv_Area", "Garage_Cars", "Year_Remod_Add", 
                 "Lot_Area", "Central_AirY", "Gr_Liv_Area:Overall_QualExcellent", 
-                "Overall_QualVery_Excellent", "Bldg_TypeDuplex", "NeighborhoodGreen_Hills")
+                "Overall_QualVery_Excellent", "Bldg_TypeDuplex", "NeighborhoodCollege_Creek")
 
 table_compact <- data.frame(
   Estimate = round(coefficients[kept_coefs, "Estimate"], 3),
@@ -92,10 +92,15 @@ table_compact$p_value <- ifelse(table_compact$p_value == 0.000,
                          "<0.001",
                          table_compact$p_value)
 
-rownames(table_compact) <- c("Year built","Living area (sq ft)","Garage capacity (cars)",
-                             "Year remodelled", "Lot area (sq ft)", "Air Conditioning=yes", "Living area × Excellent quality", 
-                             "Quality=very excellent (vs very poor)", "Building type=duplex (vs single-family)", 
-                             "Neighbourhood=Green Hills (vs North Ames)")
+rownames(table_compact) <- c("Year built",
+                             "Living area slope (Average quality baseline)",
+                             "Garage capacity (cars)",
+                             "Year remodelled", "Lot area (sq ft)", "Air Conditioning=yes", 
+                             "Living area × Excellent quality", 
+                             "Quality=very excellent (vs Average)", 
+                             "Building type=duplex (vs single-family)", 
+                             "Neighbourhood=College Creek (vs North Ames)")
+
 knitr::kable(table_compact, 
              format = "html", 
              caption = "Selected coefficients, with their relative Standard Errors, Confidence Intervals, and p values",
@@ -104,8 +109,8 @@ knitr::kable(table_compact,
               kable_styling(full_width = FALSE, position = "center") 
 
 # C) Interaction Term 
-interaction_terms <- c("Gr_Liv_Area","Gr_Liv_Area:Overall_QualPoor", "Gr_Liv_Area:Overall_QualFair", 
-                       "Gr_Liv_Area:Overall_QualBelow_Average", "Gr_Liv_Area:Overall_QualAverage", 
+interaction_terms <- c("Gr_Liv_Area","Gr_Liv_Area:Overall_QualVery_Poor", "Gr_Liv_Area:Overall_QualPoor", "Gr_Liv_Area:Overall_QualFair", 
+                       "Gr_Liv_Area:Overall_QualBelow_Average", 
                        "Gr_Liv_Area:Overall_QualAbove_Average", "Gr_Liv_Area:Overall_QualGood", 
                        "Gr_Liv_Area:Overall_QualVery_Good", "Gr_Liv_Area:Overall_QualExcellent",                  
                        "Gr_Liv_Area:Overall_QualVery_Excellent")
@@ -131,8 +136,7 @@ knitr::kable(table_interaction,
              caption = "Baseline and Interaction terms, with their relative Standard Errors, Confidence Intervals, and p values",
              align = "r"
              ) %>%
-              kable_styling(full_width = FALSE, position = "center") 
-
+              kable_styling(full_width = FALSE, position = "center")
 ```
 
 ## 3.1) The required plots (residuals vs fitted, rediuals vs each predictor, normal q-q plot)
