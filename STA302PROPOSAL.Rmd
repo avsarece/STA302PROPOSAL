@@ -39,6 +39,7 @@ round(100 * prop.table(table(ames$Neighborhood)), 1)
 ## 1) Fit a preliminary model using at least 9 predictors from your dataset
 ```{r, fig.height=3.5, fig.width=3.5}
 # Fit a preliminary model using at least 9 predictors from your dataset
+ames$Overall_Qual <- relevel(ames$Overall_Qual, ref = "Average")
 og_model <- lm(Sale_Price ~ Year_Built + Gr_Liv_Area + Year_Remod_Add + 
                  Garage_Cars + Lot_Area + Overall_Qual + Neighborhood + 
                  Bldg_Type + Central_Air + Overall_Qual*Gr_Liv_Area, data = ames)
