@@ -34,6 +34,15 @@ round(100 * prop.table(table(ames$Overall_Qual)), 1)
 round(100 * prop.table(table(ames$Bldg_Type)), 1)
 round(100 * prop.table(table(ames$Central_Air)), 1)
 round(100 * prop.table(table(ames$Neighborhood)), 1)
+ggplot(ames, aes(x = Gr_Liv_Area, y = Sale_Price, color = Overall_Qual)) +
+  geom_point(alpha = 0.4) +
+  labs(
+    title = "Relation Between Living Area and Sale Price by Overall Quality",
+    x = "Gr_Liv_Area",
+    y = "Sale_Price",
+  ) +
+  theme_minimal()
+
 
 ```
 ## 1) Fit a preliminary model using at least 9 predictors from your dataset
