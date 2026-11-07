@@ -429,3 +429,9 @@ anova(no_int_model, og_model)
  
 
 ```
+
+```{r}
+# BoxCox to find which exponent for the response
+bc <- boxCox(og_model)   
+bc$x[which.max(bc$y)]   
+```
