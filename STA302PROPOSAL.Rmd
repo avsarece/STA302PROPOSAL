@@ -4,12 +4,14 @@
 install.packages("AmesHousing")
 install.packages("dplyr")
 install.packages("kableExtra")
+install.packages("car")
 
 library(AmesHousing)
 library(kableExtra)
 library(knitr)
 library(dplyr)
 library(ggplot2)
+library(car)
 
 ames_raw <- AmesHousing::ames_raw 
 ames     <- make_ames()             
