@@ -1,10 +1,10 @@
 
 ## INSTALL LIBRARIES
 ```{r}
-install.packages("AmesHousing")
-install.packages("dplyr")
-install.packages("kableExtra")
-install.packages("car")
+#install.packages("AmesHousing")
+#install.packages("dplyr")
+#install.packages("kableExtra")
+#install.packages("car")
 
 library(AmesHousing)
 library(kableExtra)
@@ -86,7 +86,7 @@ knitr::kable(table,
 
 kept_coefs <- c("Year_Built", "Gr_Liv_Area", "Garage_Cars", "Year_Remod_Add", 
                 "Lot_Area", "Central_AirY", "Gr_Liv_Area:Overall_QualExcellent", 
-                "Overall_QualExcellent", "Bldg_TypeDuplex", "NeighborhoodCollege_Creek")
+                "Overall_QualExcellent", "Bldg_TypeDuplex")
 
 table_compact <- data.frame(
   Estimate = round(coefficients[kept_coefs, "Estimate"], 3),
@@ -110,8 +110,7 @@ rownames(table_compact) <- c("Year built",
                              "Year remodelled", "Lot area (sq ft)", "Air Conditioning=yes", 
                              "Living area × Excellent quality", 
                              "Quality=excellent (vs Average)", 
-                             "Building type=duplex (vs single-family)", 
-                             "Neighbourhood=College Creek (vs North Ames)")
+                             "Building type=duplex (vs single-family)")
 
 knitr::kable(table_compact, 
              format = "html", 
