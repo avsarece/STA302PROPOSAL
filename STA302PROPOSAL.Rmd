@@ -1,10 +1,10 @@
 
 ## INSTALL LIBRARIES
 ```{r}
-#install.packages("AmesHousing")
-#install.packages("dplyr")
-#install.packages("kableExtra")
-#install.packages("car")
+install.packages("AmesHousing")
+install.packages("dplyr")
+install.packages("kableExtra")
+install.packages("car")
 
 library(AmesHousing)
 library(kableExtra)
@@ -13,7 +13,6 @@ library(dplyr)
 library(ggplot2)
 library(car)
 
-ames_raw <- AmesHousing::ames_raw 
 ames     <- make_ames()             
 
 ```
@@ -50,6 +49,7 @@ ggplot(ames, aes(x = Gr_Liv_Area, y = Sale_Price, color = Overall_Qual)) +
 ## 1) Fit a preliminary model using at least 9 predictors from your dataset
 ```{r, fig.height=3.5, fig.width=3.5}
 # Fit a preliminary model using at least 9 predictors from your dataset
+# Relevel from very poor to average
 ames$Overall_Qual <- relevel(ames$Overall_Qual, ref = "Average")
 og_model <- lm(Sale_Price ~ Year_Built + Gr_Liv_Area + Year_Remod_Add + 
                  Garage_Cars + Lot_Area + Overall_Qual + Neighborhood + 
@@ -226,7 +226,6 @@ plot(x = x_value, y = ames$Sale_Price,
 abline(0, 1, lty = 2)                                   
 lines(lowess(fitted(og_model), ames$Sale_Price), col = "red")   
 
-par(mfrow = c(1, 1))
 dev.off()
 ```
 
@@ -278,7 +277,6 @@ plot(x = ames$Year_Built, y = ames$Year_Remod_Add,
 #     main = "Lot Area vs Car capacity in Garage",
 #     xlab = "Garage_Cars", ylab = "Lot_Area")
 
-par(mfrow = c(3, 4))
 dev.off() 
 ```
 ## 4) WHAT WILL BE IN THE REPORT
@@ -405,7 +403,6 @@ plot(x = ames$Garage_Cars, y = ames$Lot_Area,
      main = "Lot Area vs Car capacity in Garage",
      xlab = "Garage_Cars", ylab = "Lot_Area")
 
-par(mfrow = c(3, 4))
 dev.off() 
 ```
 
