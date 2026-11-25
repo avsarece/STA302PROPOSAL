@@ -939,3 +939,144 @@ anova(no_int_model, og_model)
 bc <- boxCox(og_model)   
 bc$x[which.max(bc$y)]   
 ```
+
+##Checking Problematic Points on Untransformed Model
+```{r}
+
+pga <- read.csv("data/ames.csv", header = TRUE)
+
+str(pga)
+
+numeric_cols <- c(3, 5:10, 12)
+
+numeric_cols <- numeric_cols[
+  sapply(pga[, numeric_cols], is.numeric)
+]
+
+graphics.off()
+
+par(mfrow = c(3, 3), mar = c(4, 4, 3, 1))
+
+for(i in numeric_cols){
+  boxplot(
+    pga[, i],
+    main = paste0("Boxplot of ", names(pga)[i]),
+    xlab = names(pga)[i],
+    horizontal = TRUE
+  )
+}
+
+model10 <- lm(Sale_Price ~ Year_Built + Gr_Liv_Area + Year_Remod_Add + 
+                 Garage_Cars + Lot_Area + Overall_Qual + Neighborhood + 
+                 Bldg_Type + Central_Air + Overall_Qual*Gr_Liv_Area, data = pga)
+summary(model10)
+
+#useful values:
+n <- nrow(pga)
+p <- length(coef(model10))-1
+
+# leverage cutoff
+h_cut <- 2*(p+1)/n
+
+# cooks cutoff
+cook_cut <- qf(0.5, p+1, n-p-1)
+
+# DFFITS cutoff
+fits_cut <- 2*sqrt((p+1)/n)
+
+#DFBETAS cutoff
+beta_cut <- 2/sqrt(n)
+
+# leverage
+h_ii <- hatvalues(model10)
+
+# standardized residuals 
+r_i <- rstandard(model10)
+
+# Cook's Distance
+D_i <- cooks.distance(model10)
+
+# DFFITS
+dffits_i <- dffits(model10)
+
+#DFBETAS
+dfbetas_i <- dfbetas(model10)
+
+# which observations are leverage points?
+which(h_ii > h_cut)
+
+# which observations are regression outliers?
+which(r_i > 4 | r_i < -4)
+
+# which observations are influential by cook's distance?
+which(D_i > cook_cut)
+
+# which observations are influential by dffits?
+which(abs(dffits_i) > fits_cut)
+
+# which observations are influential by dfbetas?
+for(i in 1:8){
+print(paste0("Beta ", i-1))
+print(which(abs(dfbetas_i[,i]) > beta_cut)) # this checks all betas in a loop
+}
+```
+
+##Checking Problematic Points after Ln Transformation
+```{r}
+lnSale_Price <- log(pga$Sale_Price)
+
+model11 <- lm(lnSale_Price ~ Year_Built + Gr_Liv_Area + Year_Remod_Add + 
+                 Garage_Cars + Lot_Area + Overall_Qual + Neighborhood + 
+                 Bldg_Type + Central_Air + Overall_Qual*Gr_Liv_Area, data = pga)
+
+# use R functions to count the number of observations and the number of predictors
+n2 <- nrow(pga)
+p2 <- length(coef(model11))-1
+
+# leverage cutoff
+h_cut <- 2*(p2+1)/n2
+
+# cooks cutoff
+cook_cut <- qf(0.5, p2+1, n2-p2-1)
+
+# DFFITS cutoff
+fits_cut <- 2*sqrt((p2+1)/n2)
+
+#DFBETAS cutoff
+beta_cut <- 2/sqrt(n2)
+
+# leverage statistic
+h_jj <- hatvalues(model11)
+
+# standardized residuals
+r_j <- rstandard(model11)
+
+# cook's distance
+D_j <- cooks.distance(model11)
+
+# dffits
+dffits_j <- dffits(model11)
+
+# dfbetas
+dfbetas_j <- dfbetas(model11)
+
+# which observations are leverage points?
+which(h_jj > h_cut)
+
+# which observations are regression outliers?
+which(r_j > 4 | r_j < -4)
+
+# which observations are influential by cook's distance?
+which(D_j > cook_cut)
+
+# which observations are influential by dffits?
+which(abs(dffits_j) > fits_cut)
+
+# which observations are influential by dfbetas?
+for(i in 1:8){
+print(paste0("Beta ", i-1))
+print(which(abs(dfbetas_j[,i]) > beta_cut)) # this checks all betas in a loop
+}
+```
+
+
