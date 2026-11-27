@@ -1,0 +1,615 @@
+## INSTALL LIBRARIES
+```{r}
+install.packages("AmesHousing")
+install.packages("kableExtra")
+install.packages("knitr")
+install.packages("dplyr")
+install.packages("ggplot2")
+install.packages("car")
+
+library(AmesHousing)
+library(kableExtra)
+library(knitr)
+library(dplyr)
+library(ggplot2)
+library(car)
+
+ames     <- make_ames()
+```
+
+## 1) DATA PREPARATION
+```{r}
+# Remove 5 houses: The dataset author (De Cock, 2011, data documentation) recommends
+# removing houses > 4000 sq ft: 3 are partial sales that do not reflect market value,
+# 2 are unusually large homes. (JUSTIFIED)
+ames[ames$Gr_Liv_Area > 4000, c("Gr_Liv_Area", "Sale_Price", "Sale_Condition")]
+ames <- subset(ames, Gr_Liv_Area <= 4000)
+ames <- droplevels(ames)
+
+# Relevel from very poor to average
+ames$Overall_Qual <- relevel(ames$Overall_Qual, ref = "Average")
+
+# Add transformed response values to the table
+ames$Log_Price <- log(ames$Sale_Price)
+ames$Price_0.2 <- ames$Sale_Price^0.2
+
+# Tiny neighbourhoods will show up as high-leverage points later (note as a limitation)
+sort(table(ames$Neighborhood))
+nrow(ames)
+
+```
+
+
+## 2) PROBLEMATIC OBSERVATIONS (Before Transformation)
+```{r}
+model <- lm(Sale_Price ~ Year_Built + Year_Remod_Add + Garage_Cars + Lot_Area + Neighborhood +
+        Bldg_Type + Central_Air + Overall_Qual * Gr_Liv_Area, data = ames) # Original Model
+
+n <- nobs(model)
+p <- length(coef(model)) - 1
+
+# leverage cutoff
+hcut <- 2 * (p + 1) / n
+
+# outlier cutoff
+rcut <- 4
+
+# cook's distance cutoff
+cookcut <- qf(0.5, p + 1, n - p - 1)
+
+# dffits cutoff
+fitcut <- 2 * sqrt((p + 1) / n)
+
+# dfbetas cutoff
+betacut <- 2 / sqrt(n)
+
+# leverage statistic
+h_ii <- hatvalues(model)
+
+# standardized residuals
+r_i <- rstandard(model)
+
+# cook's distance
+D_i <- cooks.distance(model)
+
+# dffits
+dffits_i <- dffits(model)
+
+# dfbetas (one column per coefficient)
+dfbetas_i <- dfbetas(model)
+
+# which observations are leverage points?
+leverage <- which(h_ii > hcut)
+
+# which observations are regression outliers?
+outliers <- which(r_i > rcut | r_i < -rcut)
+
+# which observations are influential by cook's distance?
+infl_cook <- which(D_i > cookcut)
+
+# which observations are influential by dffits?
+infl_dffits <- which(abs(dffits_i) > fitcut)
+
+# How many of each?
+cat("Num of leverage points:\n")
+length(leverage)
+cat("Num of outliers:\n")
+length(outliers)
+cat("Num of influential points by cook's distance:\n")
+length(infl_cook)
+cat("Num of influential point by dffits:\n")
+length(infl_dffits)
+
+# Problematic in more than one way:
+# outliers that are also influential by dffits
+out_and_dffits <- intersect(outliers, infl_dffits)
+cat("Outliers that are also influential by dffits:\n")
+out_and_dffits
+
+# outliers that are also leverage points
+out_and_lev <- intersect(outliers, leverage)
+cat("Outliers that are also leverage points:\n")
+out_and_lev
+
+knitr::kable(ames[out_and_dffits, c("Sale_Price", "Gr_Liv_Area", "Overall_Qual", "Neighborhood", "Sale_Condition")],
+             caption = "Houses that are both outliers and influential (DFFITS)") %>%
+  kable_styling(full_width = FALSE)
+
+# Who are these houses?
+knitr::kable(ames[out_and_lev, c("Sale_Price", "Gr_Liv_Area", "Overall_Qual", "Neighborhood", "Sale_Condition")],
+             caption = "Houses that are both outliers and leverage points") %>%
+  kable_styling(full_width = FALSE)
+
+par(mfrow = c(1, 1))
+plot(fitted(model), ames$Sale_Price, pch = 16, cex = 0.5, col = "grey70",
+     main = "Response vs Fitted, problematic observations highlighted (original model)",
+     xlab = "Fitted Sale_Price", ylab = "Sale_Price")
+abline(0, 1, lty = 2, lwd = 2)
+
+points(fitted(model)[leverage],  ames$Sale_Price[leverage],  col = "blue", pch = 1)
+points(fitted(model)[infl_cook], ames$Sale_Price[infl_cook], col = "orange", pch = 17)
+points(fitted(model)[outliers],  ames$Sale_Price[outliers],  col = "red", pch = 16)
+
+legend("bottomright", legend = c("Leverage", "Influential (Cook's D)", "Outlier"),
+       col = c("blue", "orange", "red"), pch = c(1, 17, 16), cex = 0.8)
+dev.copy(png, "response_vs_fitted_problematic_original.png", width = 3600, height = 2700, res = 250)
+dev.off()
+
+```
+
+## 3) HELPER FUNCTION PLOTS
+```{r}
+predictors <- c("Year_Built", "Year_Remod_Add", "Gr_Liv_Area", "Garage_Cars", "Lot_Area",
+                "Overall_Qual", "Neighborhood", "Bldg_Type", "Central_Air")
+
+# Gives residuals vs fitted, normal Q-Q, and response vs fitted
+diag_plots <- function(model, title = "", file) {
+  r <- resid(model)
+  f <- fitted(model)
+  y <- model.response(model.frame(model))
+  par(mfrow = c(1, 3))
+  plot(f, r, main = paste("Residuals vs Fitted", title), xlab = "Fitted", ylab = "Residuals")
+  abline(h = 0, lty = 2)
+  qqnorm(r, main = paste("Normal Q-Q", title)); qqline(r)
+  plot(f, y, main = paste("Response vs Fitted", title), xlab = "Fitted", ylab = "Response")
+  abline(0, 1, lty = 2); lines(lowess(f, y), col = "red", lwd = 2)
+  par(mfrow = c(1, 1))
+  dev.copy(png,file, width = 3000, height = 1100, res = 200)
+  dev.off()
+}
+
+# Gives residuals vs each predictor
+resid_vs_pred <- function(model, data, title = "", file) {
+  r <- resid(model)
+  par(mfrow = c(3, 3))
+  for (v in predictors) {
+    plot(data[[v]], r, main = paste("Residuals vs", v, title), xlab = v, ylab = "Residuals")
+    abline(h = 0, lty = 2)
+  }
+  par(mfrow = c(1, 1))
+  dev.copy(png, file, width = 3000, height = 3000, res = 200)
+  dev.off()
+}
+```
+
+## 4) TRANSFORMATIONS 
+
+## 4.1) CHOOSE WHICH TRANSFORMATION FOR RESPONSE (ln vs ^0.2)
+````{r}
+model_orig <- lm(Sale_Price ~ Year_Built + Year_Remod_Add + Garage_Cars + Lot_Area + Neighborhood +
+        Bldg_Type + Central_Air + Overall_Qual * Gr_Liv_Area, data = ames)
+model_log <- lm(Log_Price ~ Year_Built + Year_Remod_Add + Garage_Cars + Lot_Area + Neighborhood +
+        Bldg_Type + Central_Air + Overall_Qual * Gr_Liv_Area, data = ames)
+model_0.2 <- lm(Price_0.2 ~ Year_Built + Year_Remod_Add + Garage_Cars + Lot_Area + Neighborhood +
+        Bldg_Type + Central_Air + Overall_Qual * Gr_Liv_Area, data = ames)
+
+sum_orig <- summary(model_orig)
+coefs <- coef(sum_orig)                      # the coefficient table as a matrix
+round(coefs[!grepl("^Neighborhood", rownames(coefs)), ], 4)
+
+
+sum_log <- summary(model_log)
+coefs <- coef(sum_log)                      # the coefficient table as a matrix
+round(coefs[!grepl("^Neighborhood", rownames(coefs)), ], 4)
+
+sum_0.2 <- summary(model_0.2)
+coefs <- coef(sum_0.2)                      # the coefficient table as a matrix
+round(coefs[!grepl("^Neighborhood", rownames(coefs)), ], 4)
+
+diag_plots(model_orig, "original", "res_norm_plots_orig.png")
+diag_plots(model_log, "(ln)", "res_norm_plots_ln.png")
+diag_plots(model_0.2, "(^0.2)",  "res_norm_plots_0.2.png")
+
+resid_vs_pred(model_orig, ames, "original", "resid_vs_pred_orig.png")
+resid_vs_pred(model_log, ames, "(ln)", "resid_vs_pred_ln.png")
+resid_vs_pred(model_0.2,  ames, "(^0.2)","resid_vs_pred_0.2.png")
+
+# Pairwise scatterplots manually for each numerical predictor
+par(mfrow = c(4, 3), mar = c(4, 4, 2, 1))
+
+plot(x = ames$Year_Built, y = ames$Year_Remod_Add,
+     main = "Year Remodelled vs Year Built",
+     xlab = "Year_Built", ylab = "Year_Remod_Add")
+
+plot(x = ames$Year_Built, y = ames$Gr_Liv_Area,
+     main = "Above Ground Living Area vs Year Built",
+     xlab = "Year_Built", ylab = "Gr_Liv_Area")
+
+plot(x = ames$Year_Built, y = ames$Garage_Cars,
+     main = "Car capacity in Garage vs Year Built",
+     xlab = "Year_Built", ylab = "Garage_Cars")
+
+plot(x = ames$Year_Built, y = ames$Lot_Area,
+     main = "Lot Area vs Year Built",
+     xlab = "Year_Built", ylab = "Lot_Area")
+
+plot(x = ames$Year_Remod_Add, y = ames$Gr_Liv_Area,
+     main = "Above Ground Living Area vs Year Remodelled",
+     xlab = "Year_Remod_Add", ylab = "Gr_Liv_Area")
+
+plot(x = ames$Year_Remod_Add, y = ames$Garage_Cars,
+     main = "Car capacity in Garage vs Year Remodelled",
+     xlab = "Year_Remod_Add", ylab = "Garage_Cars")
+
+plot(x = ames$Year_Remod_Add, y = ames$Lot_Area,
+     main = "Lot Area vs Year Remodelled",
+     xlab = "Year_Remod_Add", ylab = "Lot_Area")
+
+plot(x = ames$Gr_Liv_Area, y = ames$Garage_Cars,
+     main = "Car capacity in Garage vs Above Ground Living Area",
+     xlab = "Gr_Liv_Area", ylab = "Garage_Cars")
+
+plot(x = ames$Gr_Liv_Area, y = ames$Lot_Area,
+     main = "Lot Area vs Above Ground Living Area",
+     xlab = "Gr_Liv_Area", ylab = "Lot_Area")
+
+plot(x = ames$Garage_Cars, y = ames$Lot_Area,
+     pch = 16, cex = 0.5, col = rgb(0, 0, 0, 0.2),
+     main = "Lot Area vs Car capacity in Garage",
+     xlab = "Garage_Cars", ylab = "Lot_Area")
+dev.copy(png, "conditional_mean_predictor_original.png", width = 3600, height = 2700, res = 250)
+dev.off() 
+
+````
+## 4.2) CHECK IF ANY NUMERICAL PREDICTORS REQUIRE TRANSFORMATION
+
+```{r}
+# How skewed are numerical predictors ?
+par(mfrow = c(2, 3))
+hist(ames$Year_Remod_Add,    main = "Year_Remod_Add",    xlab = "year")
+hist(ames$Year_Built,    main = "Year_Built",    xlab = "year")
+hist(ames$Lot_Area,    main = "Lot_Area",    xlab = "sq ft")
+hist(ames$Gr_Liv_Area, main = "Gr_Liv_Area", xlab = "sq ft")
+hist(log(ames$Lot_Area), main = "log(Lot_Area)", xlab = "log sq ft")
+hist(log(ames$Gr_Liv_Area), main = "log(Gr_Liv_Area)", xlab = "log sq ft")
+par(mfrow = c(1, 1))
+
+# Box-Cox on the skewed predictors 
+par(mfrow = c(1, 2))
+boxcox_lot <- boxCox(lm(Lot_Area ~ 1, data = ames), main = "Box-Cox: Lot_Area")
+boxcox_liv <- boxCox(lm(Gr_Liv_Area ~ 1, data = ames), main = "Box-Cox: Gr_Liv_Area")
+par(mfrow = c(1, 1))
+
+# Best lambda for each
+
+boxcox_lot$x[which.max(boxcox_lot$y)]
+# log transformation for Lot_Area justified as boxcox gives ~ 0.14
+ames$Log_Lot  <- log(ames$Lot_Area)
+
+boxcox_liv$x[which.max(boxcox_liv$y)]
+# Note: a transformation for Gr_Liv_Area isn't needed since the resid vs pred plot shows no curvature, or a funnel shape
+
+```
+
+## 4.2.a) LOG LOT AREA
+```{r}
+
+par(mfrow = c(1, 2))
+
+model_log_lot <- lm(Log_Price ~ Year_Built + Year_Remod_Add + Garage_Cars + Log_Lot +
+                      Neighborhood + Bldg_Type + Central_Air + Overall_Qual * Gr_Liv_Area,
+                    data = ames)
+par(mfrow = c(1, 2))
+# Resid vs Lot_Area
+plot(ames$Lot_Area, resid(model_log), main = "Residuals vs Lot_Area",
+     xlab = "Lot_Area", ylab = "Residuals"); abline(h = 0, lty = 2)
+
+# Resid vs log(Lot_Area)
+plot(log(ames$Lot_Area), resid(model_log_lot), main = "Residuals vs log(Lot_Area)",
+     xlab = "log(Lot_Area)", ylab = "Residuals"); abline(h = 0, lty = 2)
+par(mfrow = c(1, 1))
+# In residuals vs. log(Lot_Area), points are no longer bunched at the left with a few far-out leverage points
+```
+
+## 5) MULTICOLLINEARITY (Module 7)
+```{r}
+# VIF = 1 / (1 - R^2_j) for each numeric predictor.
+numerical_preds <- c("Year_Built", "Year_Remod_Add", "Gr_Liv_Area", "Garage_Cars", "Log_Lot")
+all_preds <- c(numerical_preds, "Overall_Qual", "Neighborhood", "Bldg_Type", "Central_Air")
+
+vif_value <- function(pred) {
+  others <- setdiff(all_preds, pred)                     
+  r2 <- summary(lm(reformulate(others, response = pred), data = ames))$r.squared
+  1 / (1 - r2)
+}
+
+vif_value("Year_Built") # > 5 (5.76)
+vif_value("Year_Remod_Add") # < 5 (2.05)
+vif_value("Gr_Liv_Area") # < 5 (2.18)
+vif_value("Garage_Cars") # < 5 (2.08)
+vif_value("Log_Lot") # < 5 (3.09)
+
+```
+
+## 6) MANUAL MODEL SELECTION (Partial F-test)
+```{r}
+model_full  <- lm(Log_Price ~ Year_Built + Year_Remod_Add + Garage_Cars + Log_Lot + Neighborhood +
+        Bldg_Type + Central_Air + Overall_Qual * Gr_Liv_Area, data = ames)
+
+# No Year_Remod_Add
+model_noRem <- lm(Log_Price ~ Year_Built + Garage_Cars + Log_Lot + Neighborhood +
+        Bldg_Type + Central_Air + Overall_Qual * Gr_Liv_Area, data = ames)
+
+cat("Anova test for Year_Remod_Add\n")
+print(anova(model_noRem, model_full)) # Pr(>F) very small (<2.2e-16), so keep it. 
+# Year_Remod_Add significantly improves the model
+
+# No Year_Built
+model_noBlt <- lm(Log_Price ~ Year_Remod_Add + Garage_Cars + Log_Lot + Neighborhood +
+        Bldg_Type + Central_Air + Overall_Qual * Gr_Liv_Area, data = ames)
+
+cat("Anova test for the Year_Built\n")
+print(anova(model_noBlt, model_full)) # Pr(>F) very small (<2.2e-16), so keep it. 
+
+
+# No Interaction Term
+model_noInt <- lm(Log_Price ~ Year_Built + Year_Remod_Add + Garage_Cars + Log_Lot + Neighborhood +
+                    Bldg_Type + Central_Air + Overall_Qual + Gr_Liv_Area, data = ames)
+
+# KEY TEST FOR THE RESEARCH QUESTION: does the living-area slope differ by quality?
+cat("Anova test for the interaction term\n")
+print(anova(model_noInt, model_full)) # p = 8.3e-05 (Df = 9), so keep it
+
+# For other predictors, no need to run partial f-tests since it would count as p-hacking, also it is supported by literature in our proposal.
+# Year_Built had a VIF > 5, so justified 
+# Year_Remod_Add has multicollinearity with Year_Built, so justified
+# Interaction term is the key test bc of the research question, so justified
+```
+
+## 7) FINAL MODEL
+
+## 7.a) HELPERS
+```{r}
+predictors <- c("Year_Built", "Year_Remod_Add", "Gr_Liv_Area", "Garage_Cars", "Log_Lot",
+                "Overall_Qual", "Neighborhood", "Bldg_Type", "Central_Air")
+
+# Gives residuals vs fitted, normal Q-Q, and response vs fitted
+diag_plots_final <- function(model, title = "", file) {
+  r <- resid(model)
+  f <- fitted(model)
+  y <- model.response(model.frame(model))
+  par(mfrow = c(1, 3))
+  plot(f, r, main = paste("Residuals vs Fitted", title), xlab = "Fitted", ylab = "Residuals")
+  abline(h = 0, lty = 2)
+  qqnorm(r, main = paste("Normal Q-Q", title)); qqline(r)
+  plot(f, y, main = paste("Response vs Fitted", title), xlab = "Fitted", ylab = "Response")
+  abline(0, 1, lty = 2); lines(lowess(f, y), col = "red", lwd = 2)
+  par(mfrow = c(1, 1))
+  dev.copy(png, file, width = 3000, height = 1100, res = 200)
+  dev.off()
+}
+
+# Gives residuals vs each predictor
+resid_vs_pred_final <- function(model, data, title = "", file) {
+  r <- resid(model)
+  par(mfrow = c(3, 3))
+  for (v in predictors) {
+    plot(data[[v]], r, main = paste("Residuals vs", v, title), xlab = v, ylab = "Residuals")
+    abline(h = 0, lty = 2)
+  }
+  par(mfrow = c(1, 1))
+  dev.copy(png, file, width = 3000, height = 3000, res = 200)
+  dev.off()
+}
+```
+
+## 7.b) PLOTS FOR FINAL MODEL
+````{r}
+model_final  <- lm(Log_Price ~ Year_Built + Year_Remod_Add + Garage_Cars + Log_Lot + Neighborhood +
+        Bldg_Type + Central_Air + Overall_Qual * Gr_Liv_Area, data = ames)
+summary(model_final)
+
+diag_plots_final(model_final, "(final)", "res_norm_plots_final.png")
+
+resid_vs_pred_final(model_final,  ames, "(final)","resid_vs_pred_final.png")
+
+# Pairwise scatterplots manually for each numerical predictor
+par(mfrow = c(4, 3), mar = c(4, 4, 2, 1))
+
+plot(x = ames$Year_Built, y = ames$Year_Remod_Add,
+     main = "Year Remodelled vs Year Built",
+     xlab = "Year_Built", ylab = "Year_Remod_Add")
+
+plot(x = ames$Year_Built, y = ames$Gr_Liv_Area,
+     main = "Above Ground Living Area vs Year Built",
+     xlab = "Year_Built", ylab = "Gr_Liv_Area")
+
+plot(x = ames$Year_Built, y = ames$Garage_Cars,
+     main = "Car capacity in Garage vs Year Built",
+     xlab = "Year_Built", ylab = "Garage_Cars")
+
+plot(x = ames$Year_Built, y = ames$Log_Lot,
+     main = "log(Lot Area) vs Year Built",
+     xlab = "Year_Built", ylab = "Log_Lot")
+
+plot(x = ames$Year_Remod_Add, y = ames$Gr_Liv_Area,
+     main = "Above Ground Living Area vs Year Remodelled",
+     xlab = "Year_Remod_Add", ylab = "Gr_Liv_Area")
+
+plot(x = ames$Year_Remod_Add, y = ames$Garage_Cars,
+     main = "Car capacity in Garage vs Year Remodelled",
+     xlab = "Year_Remod_Add", ylab = "Garage_Cars")
+
+plot(x = ames$Year_Remod_Add, y = ames$Log_Lot,
+     main = "log(Lot Area) vs Year Remodelled",
+     xlab = "Year_Remod_Add", ylab = "Log_Lot")
+
+plot(x = ames$Gr_Liv_Area, y = ames$Garage_Cars,
+     main = "Car capacity in Garage vs Above Ground Living Area",
+     xlab = "Gr_Liv_Area", ylab = "Garage_Cars")
+
+plot(x = ames$Gr_Liv_Area, y = ames$Log_Lot,
+     main = "log(Lot Area) vs Above Ground Living Area",
+     xlab = "Gr_Liv_Area", ylab = "Log_Lot")
+
+plot(x = ames$Garage_Cars, y = ames$Log_Lot,
+     pch = 16, cex = 0.5, col = rgb(0, 0, 0, 0.2),
+     main = "log(Lot Area) vs Car capacity in Garage",
+     xlab = "Garage_Cars", ylab = "Log_Lot")
+dev.copy(png, "conditional_mean_predictor_final.png", width = 3600, height = 2700, res = 250)
+dev.off() 
+````
+## 7.c) COEFFICIENT TABLE FOR FINAL MODEL (FOR POSTER)
+```{r}
+coefficients <- summary(model_final)$coefficients      
+CI    <- confint(model_final)  
+
+kept_coefs <- c("Year_Built", "Gr_Liv_Area", "Garage_Cars", "Year_Remod_Add", 
+                "Log_Lot", "Central_AirY", 
+                "Overall_QualExcellent", "Bldg_TypeDuplex")
+
+table_compact <- data.frame(
+  Estimate = coefficients[kept_coefs, "Estimate"],
+  SE       = coefficients[kept_coefs, "Std. Error"],
+  Lower_95_CI  = CI[kept_coefs, 1],
+  Upper_95_CI  = CI[kept_coefs, 2],
+  p_value  =  ifelse(coefficients[kept_coefs, "Pr(>|t|)"] < 0.001, "<0.001",
+                    round(coefficients[kept_coefs, "Pr(>|t|)"], 3))
+) %>%
+  rename("Std. Err" = SE,
+         "Lower 95% CI" = Lower_95_CI, 
+         "Upper 95% CI" = Upper_95_CI, 
+        )
+
+rownames(table_compact) <- c("Year built",
+                             "Living area slope (Average quality baseline)",
+                             "Garage capacity (cars)",
+                             "Year remodelled", "ln(Lot area) (ln(sq ft))", "Air Conditioning=yes", 
+                             "Quality=excellent (vs Average)", 
+                             "Building type=duplex (vs single-family)")
+
+knitr::kable(table_compact, 
+             format = "html", 
+             caption = "Selected coefficients, with their relative Standard Errors, Confidence Intervals, and p values",
+             align = "r"
+             ) %>%
+              kable_styling(full_width = FALSE, position = "center") 
+```
+## 8) PROBLEMATIC OBSERVATIONS (After Transformation)
+```{r}
+# Transformed model = final model (selection removed nothing), so this is both the after-transformation and after-selection check.
+
+n <- nobs(model_final)
+p <- length(coef(model_final)) - 1
+
+# leverage cutoff
+hcut <- 2 * (p + 1) / n
+
+# outlier cutoff
+rcut <- 4
+
+# cook's distance cutoff
+cookcut <- qf(0.5, p + 1, n - p - 1)
+
+# dffits cutoff
+fitcut <- 2 * sqrt((p + 1) / n)
+
+# dfbetas cutoff
+betacut <- 2 / sqrt(n)
+
+# leverage statistic
+h_ii <- hatvalues(model_final)
+
+# standardized residuals
+r_i <- rstandard(model_final)
+
+# cook's distance
+D_i <- cooks.distance(model_final)
+
+# dffits
+dffits_i <- dffits(model_final)
+
+# dfbetas (one column per coefficient)
+dfbetas_i <- dfbetas(model_final)
+
+# which observations are leverage points?
+leverage <- which(h_ii > hcut)
+
+# which observations are regression outliers?
+outliers <- which(r_i > rcut | r_i < -rcut)
+
+# which observations are influential by cook's distance?
+infl_cook <- which(D_i > cookcut)
+
+# which observations are influential by dffits?
+infl_dffits <- which(abs(dffits_i) > fitcut)
+
+# How many of each?
+cat("Num of leverage points:\n")
+length(leverage)
+cat("Num of outliers:\n")
+length(outliers)
+cat("Num of influential points by cook's distance:\n")
+length(infl_cook)
+cat("Num of influential point by dffits:\n")
+length(infl_dffits)
+
+# Problematic in more than one way:
+# outliers that are also influential by dffits
+out_and_dffits <- intersect(outliers, infl_dffits)
+cat("Outliers that are also influential by dffits:\n")
+out_and_dffits
+
+# outliers that are also leverage points
+out_and_lev <- intersect(outliers, leverage)
+cat("Outliers that are also leverage points:\n")
+out_and_lev
+
+knitr::kable(ames[out_and_dffits, c("Sale_Price", "Gr_Liv_Area", "Overall_Qual", "Neighborhood", "Sale_Condition")],
+             caption = "Houses that are both outliers and influential (DFFITS)") %>%
+  kable_styling(full_width = FALSE)
+
+# Who are these houses?
+knitr::kable(ames[out_and_lev, c("Sale_Price", "Gr_Liv_Area", "Overall_Qual", "Neighborhood", "Sale_Condition")],
+             caption = "Houses that are both outliers and leverage points") %>%
+  kable_styling(full_width = FALSE)
+
+par(mfrow = c(1, 1))
+plot(fitted(model_final), ames$Log_Price, pch = 16, cex = 0.5, col = "grey70",
+     main = "Response vs Fitted, problematic observations highlighted (final model)",
+     xlab = "Fitted ln(Sale_Price)", ylab = "ln(Sale_Price)")
+abline(0, 1, lty = 2, lwd = 2)
+
+points(fitted(model_final)[leverage],  ames$Log_Price[leverage],  col = "blue", pch = 1)
+points(fitted(model_final)[infl_cook], ames$Log_Price[infl_cook], col = "orange", pch = 17)
+points(fitted(model_final)[outliers],  ames$Log_Price[outliers],  col = "red", pch = 16)
+
+legend("bottomright", legend = c("Leverage", "Influential (Cook's D)", "Outlier"),
+       col = c("blue", "orange", "red"), pch = c(1, 17, 16), cex = 0.8)
+dev.copy(png, "response_vs_fitted_problematic_final.png", width = 3600, height = 2700, res = 250)
+dev.off()
+```
+
+## 9) ANSWER THE RESEARCH QUESTION: living-area slope for each quality level
+```{r}
+# ORIGINAL MODEL
+ggplot(ames, aes(x = Gr_Liv_Area, y = Sale_Price, colour = Overall_Qual)) +
+  geom_point(alpha = 0.15, size = 0.6) +
+  geom_smooth(method = "lm", se = FALSE, linewidth = 0.9) +
+  labs(x = "Above-ground living area (sq ft)", y = "Sale price", colour = "Overall quality")
+
+# LOG SCALE (descriptive, other predictors not accounted)
+ggplot(ames, aes(x = Gr_Liv_Area, y = Log_Price, colour = Overall_Qual)) +
+  geom_point(alpha = 0.15, size = 0.6) +
+  geom_smooth(method = "lm", se = FALSE, linewidth = 0.9) +
+  labs(x = "Above-ground living area (sq ft)", y = "ln(Sale price)", colour = "Overall quality")
+
+# SLOPE OF LIVING AREA FOR EACH QUALITY LEVEL (from the final model)
+model_slopes <- lm(Log_Price ~ Year_Built + Year_Remod_Add + Garage_Cars + Log_Lot +
+                     Neighborhood + Bldg_Type + Central_Air +
+                     Overall_Qual + Overall_Qual:Gr_Liv_Area, data = ames)
+
+# Pull out the living-area slope for each quality level, with 95% CIs
+slopes <- coef(model_slopes)[grep(":Gr_Liv_Area", names(coef(model_slopes)))]
+ci     <- confint(model_slopes)[names(slopes), ]
+
+# Convert to % change in price per extra 100 sq ft
+slope_table <- data.frame(Pct_per_100sqft = 100 * (exp(100 * slopes) - 1),
+                          Lower_95        = 100 * (exp(100 * ci[, 1]) - 1),
+                          Upper_95        = 100 * (exp(100 * ci[, 2]) - 1))
+
+knitr::kable(round(slope_table, 2),
+             caption = "Estimated % change in sale price per extra 100 sq ft, by overall quality (final model)") %>%
+  kable_styling(full_width = FALSE)
+```
+
